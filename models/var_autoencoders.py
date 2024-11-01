@@ -10,7 +10,7 @@ Original file is located at
 import numpy as np
 import torch
 import torch.nn as nn
-# import torch.nn.functional as F
+import torch.nn.functional as F
 # import torch.optim as optim
 # import matplotlib.pyplot as plt
 import pandas as pd
@@ -30,37 +30,7 @@ class encoder(nn.Module):
         self.bn2 = nn.BatchNorm2d(hidden_dim*2)
         self.bn3 = nn.BatchNorm2d(hidden_dim*4)
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.relu(x)
-        x = self.conv3(x)
-        x = self.bn3(x)
-        x = self.relu(x)
-        x = x.view(x.size(0),-1)
-        mu = self.fc_mu(x)
-        logvar = self.fc_logvar(x)
-
-        return mu,logvar
-
-class decoder(nn.Module):
-  def __init__(self, latent_dim, hidden_dim, output_dim):
-    super(decoder, self).__init__()
-    self.conv1 = nn.ConvTranspose2d(latent_dim, hidden_dim*4, kernel_size=4, stride=2, padding=1)
-    self.conv2 = nn.ConvTranspose2d(hidden_dim*4, hidden_dim*2, kernel_size= 4, stride=2, padding=1)
-    self.conv3 = nn.ConvTranspose2d(hidden_dim*2, hidden_dim, kernel_size=4, stride=2, padding=1)
-    self.conv4 = nn.ConvTranspose2d(hidden_dim, output_dim, kernel_size=4, stride=2, padding=1)
-    self.relu = nn.LeakyReLU(0.2)
-    self.bn1 = nn.BatchNorm2d(hidden_dim*4)
-    self.bn2 = nn.BatchNorm2d(hidden_dim*2)
-    self.bn3 = nn.BatchNorm2d(hidden_dim)
-    self.tanh = nn.Tanh()
-
-  def forward(self, x):
-    x = x.view(x.size(0),-1,1,1)
+def forward(self, x):
     x = self.conv1(x)
     x = self.bn1(x)
     x = self.relu(x)
@@ -70,26 +40,45 @@ class decoder(nn.Module):
     x = self.conv3(x)
     x = self.bn3(x)
     x = self.relu(x)
-    x = self.conv4(x)
-    x = self.tanh(x)
-    return x
+    
+    print("Shape before flattening:", x.shape)
+    
+    x = x.view(x.size(0), -1)
+    mu = self.fc_mu(x)
+    logvar = self.fc_logvar(x)
+
+    return mu, logvar
+
+
+class Decoder(nn.Module):
+    def __init__(self, latent_dim, hidden_dim, output_dim=32):
+        super(Decoder, self).__init__()
+        self.fc = nn.Linear(latent_dim, hidden_dim*8*8*8)
+        self.conv3d1 = nn.ConvTranspose3d(hidden_dim,hidden_dim//2, kernel_size=4, stride=2, padding=1)
+        self.conv3d2 = nn.ConvTranspose3d(hidden_dim//2,hidden_dim//4, kernel_size=4, stride=2, padding=1)
+        self.conv3d3 = nn.ConvTranspose3d(hidden_dim//4,1, kernel_size=4, stride=2, padding=1)
+        self.output_dim = output_dim
+
+    def forward(self, z):
+        z = self.fc(z)
+        z = z.view(z.size(0), -1,8,8,8)
+        z = F.relu(self.conv3d1(z))
+        z = F.relu(self.conv3d2(z))
+        z = torch.sigmoid(self.conv3d3(z))
+        return z
 
 class VAE(nn.Module):
-  def __init__(self, input_dim, hidden_dim, latent_dim):
-    super(VAE, self).__init__()
-    self.encoder = encoder(input_dim, hidden_dim, latent_dim)
-    self.decoder = decoder(latent_dim, hidden_dim, input_dim)
-    self.latent_dim = latent_dim
-    self.input_dim = input_dim
-
-  def reparameterize(self, mu, logvar):
-    std = torch.exp(0.5*logvar)
-    eps = torch.randn_like(std)
-    return mu + eps*std
-
-  def forward(self, x):
-    mu, logvar = self.encoder(x)
-    z = self.reparameterize(mu, logvar)
-    x_hat = self.decoder(z)
-    return x_hat,mu,logvar
+    def __init__(self, input_dim, hidden_dim, latent_dim, output_dim=32):
+        super(VAE, self).__init__()
+        self.encoder = encoder(input_dim, hidden_dim, latent_dim)
+        self.decoder = Decoder(latent_dim, hidden_dim, output_dim)
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    def forward(self, x):
+        mu, logvar = self.encoder(x)
+        z = self.reparameterize(mu, logvar)
+        x_reconstructed = self.decoder(z)
+        return x_reconstructed, mu, logvar
 
