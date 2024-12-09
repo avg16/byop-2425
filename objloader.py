@@ -1,7 +1,7 @@
 #ar script here
 class OBJ():
     def __init__(self, filename, swap_y_z = False):
-
+        "swap y z to match the software's config"
         self.faces = []
         self.texture_coords = []
         self.normals = []

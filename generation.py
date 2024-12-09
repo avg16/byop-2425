@@ -20,24 +20,24 @@ import sys
 sys.path.append("/content/drive/My Drive/pix3d/byop-2425/models")
 from gan2 import CompactGenerator, CompactDiscriminator
 
-# !pip install trimesh
+!pip install trimesh
 
 def generate_3d_object(generator, image, device):
-  generator.eval()
-  generator.to(device)
+    generator.eval()
+    generator.to(device)
 
-  z = torch.randn(1, 50).to(device)
+    if len(image.shape) == 3:
+          image = image.unsqueeze(0)
+    image = image.to(device)
+    batch_size = image.shape[0]
+    z = torch.randn(batch_size, 50).to(device)
 
-  ref_image = ref_image.to(device)
-  if len(reference_image.shape) == 3:
-        reference_image = reference_image.unsqueeze(0)
+    with torch.no_grad():
+        generated_voxels = generator(image, z)
 
-  with torch.no_grad():
-      generated_voxels = generator(ref_image, z)
+    voxels_np = generated_voxels.squeeze().cpu().numpy()
 
-  voxels_np = generated_voxels.squeeze().cpu().numpy()
-
-  return voxels_np
+    return voxels_np
 
 def visualise_voxels(voxels, threshold = 0.5):
   binary_voxels = voxels > threshold
@@ -56,9 +56,12 @@ def visualise_voxels(voxels, threshold = 0.5):
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     generator = CompactGenerator(img_dim=3, hidden_dim=16, latent_dim=50).to(device)
-    generator.load_state_dict(torch.load('/content/drive/MyDrive/pix3d/byop-2425/generator_epoch_5.pth'))
-    img_path = "/content/drive/MyDrive/pix3d/img/bed/0001.png"
-    reference_image = plt.imread(img_path)
+    generator.load_state_dict(torch.load('/content/drive/MyDrive/pix3d/byop-2425/generator_epoch_5.pth', weights_only = True))
+    img_path = "/content/drive/MyDrive/pix3d/img/chair/0004.png"
+
+    from PIL import Image
+    reference_image = Image.open(img_path)
+
     transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor(),])
@@ -66,12 +69,16 @@ def main():
     generated_voxels = generate_3d_object(generator, reference_image, device)
     visualise_voxels(generated_voxels)
 
-def voxels_to_mesh(voxels, threshold=0.5):
+    # from vox2obj import convert_to_obj
+    # convert_to_obj(in_file="in.vox", out_file="out.obj", texture_file="texture.png")
+    voxels_to_mesh(generated_voxels, threshold=0.5)
 
+def voxels_to_mesh(voxels, threshold=1):
+    from skimage.measure import marching_cubes
     binary_voxels = voxels > threshold
-    mesh = trimesh.voxel.make_mesh(binary_voxels)
-
-    mesh.export('generated_object.obj')
+    vertices, faces, normals, values = marching_cubes(binary_voxels, level=threshold)
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+    # mesh.export('generated_object1.obj')
     return mesh
 
 main()
