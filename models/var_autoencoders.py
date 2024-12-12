@@ -19,66 +19,110 @@ class encoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, latent_dim):
         super(encoder, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, kernel_size=4, stride=2, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim*2, kernel_size=4, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(hidden_dim*2, hidden_dim*4, kernel_size=4, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim * 2, kernel_size=4, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim * 2, hidden_dim * 4, kernel_size=4, stride=2, padding=1)
+        # self.a = nn.Conv2d(latent_dim)
+
+        self.flatten_size = None
+        
         #mean of the latent space
-        self.fc_mu = nn.Linear(hidden_dim*4*4*4, latent_dim)
+        self.fc_mu = nn.Linear(hidden_dim*4*4*4*4*4, latent_dim)
         #log variance
-        self.fc_logvar = nn.Linear(hidden_dim*4*4*4, latent_dim)
+        self.fc_logvar = nn.Linear(hidden_dim*4*4*4*4*4, latent_dim)
+        
         self.relu = nn.LeakyReLU(0.2)
         self.bn1 = nn.BatchNorm2d(hidden_dim)
-        self.bn2 = nn.BatchNorm2d(hidden_dim*2)
-        self.bn3 = nn.BatchNorm2d(hidden_dim*4)
+        self.bn2 = nn.BatchNorm2d(hidden_dim * 2)
+        self.bn3 = nn.BatchNorm2d(hidden_dim * 4)
 
-def forward(self, x):
-    x = self.conv1(x)
-    x = self.bn1(x)
-    x = self.relu(x)
-    x = self.conv2(x)
-    x = self.bn2(x)
-    x = self.relu(x)
-    x = self.conv3(x)
-    x = self.bn3(x)
-    x = self.relu(x)
-    
-    print("Shape before flattening:", x.shape)
-    
-    x = x.view(x.size(0), -1)
-    mu = self.fc_mu(x)
-    logvar = self.fc_logvar(x)
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.relu(self.bn3(self.conv3(x)))
 
-    return mu, logvar
+        print("Shape before flattening:", x.shape)
+
+        x = x.view(x.size(0), -1)
+        mu = self.fc_mu(x)
+        logvar = self.fc_logvar(x)
+
+        return mu, logvar
 
 
-class Decoder(nn.Module):
+class decoder(nn.Module):
     def __init__(self, latent_dim, hidden_dim, output_dim=32):
-        super(Decoder, self).__init__()
-        self.fc = nn.Linear(latent_dim, hidden_dim*8*8*8)
-        self.conv3d1 = nn.ConvTranspose3d(hidden_dim,hidden_dim//2, kernel_size=4, stride=2, padding=1)
-        self.conv3d2 = nn.ConvTranspose3d(hidden_dim//2,hidden_dim//4, kernel_size=4, stride=2, padding=1)
-        self.conv3d3 = nn.ConvTranspose3d(hidden_dim//4,1, kernel_size=4, stride=2, padding=1)
-        self.output_dim = output_dim
+        super(decoder, self).__init__()
+        self.fc = nn.Linear(latent_dim, hidden_dim * 8 * 8 * 8)
+        self.conv3d1 = nn.ConvTranspose3d(hidden_dim, hidden_dim // 2, kernel_size=4, stride=2, padding=1)
+        self.conv3d2 = nn.ConvTranspose3d(hidden_dim // 2, hidden_dim // 4, kernel_size=4, stride=2, padding=1)
+        self.conv3d3 = nn.ConvTranspose3d(hidden_dim // 4, 1, kernel_size=4, stride=2, padding=1)
 
     def forward(self, z):
         z = self.fc(z)
-        z = z.view(z.size(0), -1,8,8,8)
+        z = z.view(z.size(0), -1, 8, 8, 8)
         z = F.relu(self.conv3d1(z))
         z = F.relu(self.conv3d2(z))
         z = torch.sigmoid(self.conv3d3(z))
         return z
 
+
+# class VAE(nn.Module):
+#     def __init__(self, input_dim, hidden_dim, latent_dim):
+#         super(VAE, self).__init__()
+#         self.encoder = encoder(input_dim, hidden_dim, latent_dim)
+#         self.decoder = decoder(latent_dim, hidden_dim)
+
+#     def reparameterize(self, mu, logvar):
+#         std = torch.exp(0.5 * logvar)
+#         eps = torch.randn_like(std)
+#         return mu + eps * std
+
+#     def loss_function(self, recon_volumes, target_volumes, mu, logvar):
+#         recon_loss = F.mse_loss(recon_volumes, target_volumes, reduction='mean')
+#         kl_loss = 0.5 * torch.sum(torch.exp(logvar) + mu ** 2 - 1 - logvar) / mu.size(0)
+#         return recon_loss + kl_loss
+
+#     def forward(self, x):
+#         mu, logvar = self.encoder(x)
+#         z = self.reparameterize(mu, logvar)
+#         recon_volumes = self.decoder(z)
+#         print("Decoder output shape:", recon_volumes.shape)
+#         return recon_volumes, mu, logvar
+
 class VAE(nn.Module):
-    def __init__(self, input_dim, hidden_dim, latent_dim, output_dim=32):
+    def __init__(self, input_dim, hidden_dim, latent_dim, output_type="3D", output_shape=None):
         super(VAE, self).__init__()
         self.encoder = encoder(input_dim, hidden_dim, latent_dim)
-        self.decoder = Decoder(latent_dim, hidden_dim, output_dim)
+        self.decoder = decoder(latent_dim, hidden_dim)
+        
+        self.output_type = output_type
+        self.output_shape = output_shape
+
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
-    def forward(self, x):
-        mu, logvar = self.encoder(x)
-        z = self.reparameterize(mu, logvar)
-        x_reconstructed = self.decoder(z)
-        return x_reconstructed, mu, logvar
 
+    def loss_function(self, recon_output, target, mu, logvar):
+        if self.output_type == "3D":
+            recon_loss = F.mse_loss(recon_output, target, reduction='mean')
+        elif self.output_type == "2D":
+            recon_loss = F.binary_cross_entropy_with_logits(recon_output, target, reduction='mean')
+        else:
+            raise ValueError("Unsupported output type. Use '2D' or '3D'.")
+
+        kl_loss = 0.5 * torch.sum(torch.exp(logvar) + mu ** 2 - 1 - logvar) / mu.size(0)
+
+        return recon_loss + kl_loss
+
+    def forward(self, x):
+        """Forward pass for the VAE."""
+        mu, logvar = self.encoder(x)
+        z = self.reparameterize(mu, logvar) 
+        recon_output = self.decoder(z)
+
+        if self.output_shape is not None:
+            recon_output = recon_output.view(-1, *self.output_shape)
+
+        print("Decoder output shape:", recon_output.shape)
+        return recon_output, mu, logvar

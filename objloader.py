@@ -12,18 +12,18 @@ class OBJ():
             if line.startswith('#'): 
                 continue #if any comment comes in b/w
             values = line.split()
-            if not values: 
+            if not values:
                 continue
             if values[0] == 'v': # vertex
-                v = map(float, values[1:4])
+                v = list(map(float, values[1:4]))
                 if swap_y_z== True:
                     v = v[0], v[2], v[1]
                 self.vertices.append(v)
             elif values[0] == 'vt': # texture coordinate
-                v = map(float, values[1:3])
+                v = list(map(float, values[1:3]))
                 self.texture_coords.append(v)
             elif values[0] == 'vn': # normal
-                v = map(float, values[1:4])
+                v = list(map(float, values[1:4]))
                 if swap_y_z==True:
                     v = v[0], v[2], v[1]
                 self.normals.append(v)
