@@ -68,12 +68,12 @@ class VAE(nn.Module):
         return mu + eps * std
 
     def loss_function(self, recon_output, target, mu, logvar):
-    if recon_output.shape != target.shape:
-        print(f"Reshaping target from {target.shape} to {recon_output.shape}")
-        target = F.interpolate(target, size=recon_output.shape[2:], mode='trilinear', align_corners=False)
-    recon_loss = F.mse_loss(recon_output, target, reduction='mean')
-    kl_loss = 0.5 * torch.sum(torch.exp(logvar) + mu ** 2 - 1 - logvar) / mu.size(0)
-    return recon_loss + kl_loss
+        if recon_output.shape != target.shape:
+            print(f"Reshaping target from {target.shape} to {recon_output.shape}")
+            target = F.interpolate(target, size=recon_output.shape[2:], mode='trilinear', align_corners=False)
+        recon_loss = F.mse_loss(recon_output, target, reduction='mean')
+        kl_loss = 0.5 * torch.sum(torch.exp(logvar) + mu ** 2 - 1 - logvar) / mu.size(0)
+        return recon_loss + kl_loss
 
 
 
